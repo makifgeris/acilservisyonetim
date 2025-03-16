@@ -248,5 +248,5 @@ void tarihAl(char *buffer) {
 
 int yeniReceteNo() {
     static int receteNo = 1000; // Başlangıç reçete numarası
-    return receteNo++;  // Her çağrıldığında numar
+    return receteNo++; 
 }
