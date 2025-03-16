@@ -7,13 +7,14 @@
 #define MAX_HASTA 100
 #define MAX_DOKTOR 100
 
-// Hasta ve doktor yap�lar�
+// Hasta ve doktor yapıları
 typedef struct {
     char kimlikNo[12];
     char adSoyad[50];
     int hastaNumarasi;
     char sikayet[255];
     char teshis[255];
+    int acilDurum;  // 1: Acil, 0: Normal
 } Hasta;
 
 typedef struct {
@@ -49,6 +50,7 @@ void receteOlustur();
 void HL7MesajHazirla(Hasta h, char *mesaj);
 void tarihAl(char *buffer);
 void ilacListesi();
+int yeniReceteNo();
 
 int main(void) {
     girisEkrani();
@@ -61,10 +63,10 @@ void girisEkrani() {
 
     while (1) {
         printf("Kullanici Adi: ");
-        scanf("%s", kullanici); // Boşlukları engellemek için direk %s kullandık.
+        scanf("%s", kullanici);
 
         printf("Sifre: ");
-        scanf("%s", sifre); // Şifre girişini düzgün almak için boşlukları engelledik.
+        scanf("%s", sifre);
 
         if (strcmp(kullanici, "admin") == 0 && strcmp(sifre, "admin123") == 0) {
             yoneticiPaneli();
@@ -101,7 +103,7 @@ void yoneticiPaneli() {
             case 3: ilacEkle(); break;
             case 4:
                 printf("Ana menuye donuluyor...\n");
-                return; // Ana menüye dönmek için return kullanıldı.
+                return;
             default:
                 printf("Gecersiz giris! Tekrar deneyin.\n");
         }
@@ -128,23 +130,22 @@ void doktorPaneli(const char* doktorAdi) {
             case 4: receteOlustur(); break;
             case 5:
                 printf("Ana menuye donuluyor...\n");
-                return; // Ana menüye dönüş için return
+                return;
             default:
                 printf("Gecersiz secim! Tekrar deneyin.\n");
         }
     } while (1);
 }
 
-
 void doktorEkle() {
     Doktor d;
     printf("Doktor Adi: ");
-    scanf(" %[^\n]", d.isim); // D�ZELT�LD�
+    scanf(" %[^\n]", d.isim);
     printf("Kullanici Adi: ");
     scanf("%s", d.kullanici);
     printf("Sifre: ");
     scanf("%s", d.sifre);
-    
+
     doktorlar[doktorIndex++] = d;
     printf("Doktor %s basariyla eklendi.\n", d.isim);
 }
@@ -154,21 +155,39 @@ void hastaEkle() {
     printf("TC Kimlik No: ");
     scanf("%s", h.kimlikNo);
     printf("Hasta Adi: ");
-    scanf(" %[^\n]", h.adSoyad); // D�ZELT�LD�
+    scanf(" %[^\n]", h.adSoyad);
     h.hastaNumarasi = hastaIndex + 1;
+    printf("Hasta sikayeti: ");
+    scanf(" %[^\n]", h.sikayet);
+    printf("Acil Durum (1: Acil, 0: Normal): ");
+    scanf("%d", &h.acilDurum);  // Hasta acil durumu (öncelik sırası)
     hastalar[hastaIndex++] = h;
 }
 
 void hastaListele() {
+    // Acil hasta olanları önce alacak şekilde sıralama
+    for (int i = 0; i < hastaIndex - 1; i++) {
+        for (int j = i + 1; j < hastaIndex; j++) {
+            // Acil olan hastaları (acilDurum == 1) en üste alıyoruz
+            if (hastalar[i].acilDurum < hastalar[j].acilDurum) {
+                // İki hastanın yerlerini değiştir
+                Hasta temp = hastalar[i];
+                hastalar[i] = hastalar[j];
+                hastalar[j] = temp;
+            }
+        }
+    }
+
     printf("--- Hasta Listesi ---\n");
     for (int i = 0; i < hastaIndex; i++) {
-        printf("Hasta No: %d, Ad: %s, TC: %s\n", hastalar[i].hastaNumarasi, hastalar[i].adSoyad, hastalar[i].kimlikNo);
+        printf("Hasta No: %d, Ad: %s, TC: %s, Acil: %d\n", hastalar[i].hastaNumarasi, hastalar[i].adSoyad, hastalar[i].kimlikNo, hastalar[i].acilDurum);
     }
 }
 
+
 void ilacEkle() {
     printf("Ilac Adi: ");
-    scanf(" %[^\n]", ilaclar[ilacIndex].isim); // D�ZELT�LD�
+    scanf(" %[^\n]", ilaclar[ilacIndex].isim);
     ilacIndex++;
     printf("Ilac basariyla eklendi.\n");
 }
@@ -181,7 +200,7 @@ void teshisGir() {
     for (int i = 0; i < hastaIndex; i++) {
         if (hastalar[i].hastaNumarasi == hastaNo) {
             printf("Teshis: ");
-            scanf(" %[^\n]", hastalar[i].teshis); // D�ZELT�LD�
+            scanf(" %[^\n]", hastalar[i].teshis);
             printf("Teshis eklendi.\n");
             return;
         }
@@ -197,11 +216,37 @@ void receteOlustur() {
     for (int i = 0; i < hastaIndex; i++) {
         if (hastalar[i].hastaNumarasi == hastaNo) {
             printf("Ilac adi: ");
-            scanf(" %[^\n]", yazilanIlaclar[yazilanIlacIndex].isim); // D�ZELT�LD�
+            scanf(" %[^\n]", yazilanIlaclar[yazilanIlacIndex].isim);
             yazilanIlacIndex++;
-            printf("Recete olusturuldu.\n");
+            printf("Recete olusturuldu. Recete Numarasi: %d\n", yeniReceteNo());
             return;
         }
     }
     printf("Hasta bulunamadi.\n");
+}
+
+void HL7MesajHazirla(Hasta h, char *mesaj) {
+    char tarih[20];
+    tarihAl(tarih);  // Güncel tarihi al
+
+    sprintf(mesaj,
+            "MSH|^~\\&|SendingApp|SendingFac|ReceivingApp|ReceivingFac|%s||ADT^A01|12345|P|2.5|\n"
+            "PID|1||%s||%s||19800101|M|||%s|||\n"
+            "ZPD|%d|", // Acil durum bilgisi
+            tarih,
+            h.kimlikNo,
+            h.adSoyad,
+            h.sikayet,
+            h.acilDurum);  // Acil durum bilgisi HL7 mesajına ekleniyor
+}
+
+void tarihAl(char *buffer) {
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+    sprintf(buffer, "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+}
+
+int yeniReceteNo() {
+    static int receteNo = 1000; // Başlangıç reçete numarası
+    return receteNo++;  // Her çağrıldığında numar
 }
