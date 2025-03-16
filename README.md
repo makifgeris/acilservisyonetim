@@ -56,6 +56,7 @@ Bu proje, bir hastane yönetim sistemini oluşturmayı amaçlamaktadır. Sistem,
 | `ilacListesi()`        | Kayıtlı ilaçları listeler.                   |
 | `HL7mesajHazirla()`    | Hasta bilgilerine göre HL7 mesajı oluşturur. |
 | `tarihAl()`            | Sistemin mevcut zamanını alır.               |
+| `yeniReceteNo()`       | Yeni reçete numarası oluşturur.              |
 
 
 ## HL7 Sistemi Gösterimi
